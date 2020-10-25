@@ -23,8 +23,9 @@ class Portfolio:
         self.summary = get_all_ticker_info(tickers)
         self.summary['weight'] = np.array(weights) or (1/len(tickers))*np.ones(len(tickers))
         # extract currency exposure
-        self.summary['usd'] = self.summary['currency'].apply(lambda x: x == 'USD')
-        # TODO:extract market and currency exposure
+        self.currencySplit = dict_weighted_count(self.summary, 'currency')
+        # extract region exposure
+        self.marketSplit = dict_weighted_count(self.summary, 'market')
 
     def cagr(self):
         cagrs = np.array([x.cagr() for x in self.assets])
@@ -43,8 +44,10 @@ class Portfolio:
         p1 = plot_multi_asset_line(prices_scaled)
         # plot combined portfolio revenue
         p2 = plot_single_graph(combined)
-        # plot pie chart of assets
-        show(column(p1, p2))
+        # plot pie charts of assets
+        p3 = plot_pie(self.currencySplit, 'currency')
+        p4 = plot_pie(self.marketSplit, 'region')
+        show(gridplot([[p1], [p2], [p3, p4]]))
 
     def save_to_pickle(self, path: str):
         """
@@ -71,14 +74,27 @@ def get_all_ticker_info(tickers):
     data = pd.concat(data, axis=1, join='inner').transpose()
     info = data[['currency', 'longName', 'market', 'exchange', 'legalType']]
     info['ticker'] = tickers
-    info.rename(columns={'longName':'name','market':'region','legalType':'type'})
+    info.rename(columns={'longName':'name','legalType':'type'})
     return info
 
 
 def read_portfolio_from_pickle(path):
-    with open(path,'rb') as fid:
+    with open(path, 'rb') as fid:
         portfolio = pickle.load(fid)
     return portfolio
+
+
+def dict_weighted_count(df: pd.DataFrame, column: str):
+    """
+    calculate distributions in data
+    :param df: (DataFrame) with a column with the specified name, and a 'weight' colummn
+    :param column: column name of the specific column in df
+    :return: dictionary where keys = unique values in df[column] , and values = sum(<index weight>*<appeared or not>)
+    """
+    dic = dict()
+    for key in df[column].unique():
+        dic[key] = ((df[column] == key) * df['weight']).sum()
+    return dic
 
 
 if __name__ == '__main__':
