@@ -4,7 +4,6 @@ import yfinance as yf
 from datetime import date
 import numpy as np
 import pickle
-from PlottingTools import *
 #
 
 
@@ -31,24 +30,6 @@ class Portfolio:
         cagrs = np.array([x.cagr() for x in self.assets])
         return np.sum(self.summary['weight']*cagrs)
 
-    def plot(self):
-        output_file("plots.html")
-        prices_scaled = self.finance.apply(lambda x: x/x[x.first_valid_index()], axis=0)
-        w = self.summary['weight']
-        w.index = prices_scaled.columns
-        prices_corrected = prices_scaled
-        prices_corrected.iloc[0, :] = prices_scaled.apply(lambda x: x[x.first_valid_index()], axis=0)
-        prices_corrected.fillna(method='ffill', inplace=True)
-        combined = (prices_corrected * w.transpose()).sum(axis=1)  # combined portfolio worth
-        # plot all assets
-        p1 = plot_multi_asset_line(prices_scaled)
-        # plot combined portfolio revenue
-        p2 = plot_single_graph(combined)
-        # plot pie charts of assets
-        p3 = plot_pie(self.currencySplit, 'currency')
-        p4 = plot_pie(self.marketSplit, 'region')
-        show(gridplot([[p1], [p2], [p3, p4]]))
-
     def save_to_pickle(self, path: str):
         """
         Save portfolio to pickle file, compatible with load_portfolio_from_pickle function
@@ -72,9 +53,9 @@ def get_all_ticker_info(tickers):
         tickerData = yf.Ticker(tick)
         data.append(pd.DataFrame.from_dict(tickerData.info, orient='index', columns=[tick]))
     data = pd.concat(data, axis=1, join='inner').transpose()
-    info = data[['currency', 'longName', 'market', 'exchange', 'legalType']]
+    info = data[['currency', 'shortName', 'market', 'exchange']]
     info['ticker'] = tickers
-    info.rename(columns={'longName':'name','legalType':'type'})
+    info.rename(columns={'shortName': 'name'}, inplace=True)
     return info
 
 
@@ -84,7 +65,7 @@ def read_portfolio_from_pickle(path):
     return portfolio
 
 
-def dict_weighted_count(df: pd.DataFrame, column: str):
+def get_weighted_count(df: pd.DataFrame, column: str):
     """
     calculate distributions in data
     :param df: (DataFrame) with a column with the specified name, and a 'weight' colummn
@@ -94,7 +75,7 @@ def dict_weighted_count(df: pd.DataFrame, column: str):
     dic = dict()
     for key in df[column].unique():
         dic[key] = ((df[column] == key) * df['weight']).sum()
-    return dic
+    return pd.DataFrame.from_dict(dic, orient='index', columns=['weight'])
 
 
 if __name__ == '__main__':
