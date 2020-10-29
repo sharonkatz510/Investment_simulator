@@ -7,28 +7,23 @@ import pickle
 #
 
 
-class Portfolio:
+class Portfolio:    # TODO: implement "add" and "remove" methods, add ability to change resolution
     """Bundle of assets with different weights"""
-
-    def __init__(self, tickers, period=10, initAmount=500000, weights: list = None, finance=None):
+    def __init__(self, tickers, period=10, weights: list = None, finance=None):
         """
         :param tickers: list of tickers with somw general info
         :param period: time period in years
         :param initAmount: money in fund
         :param weights: list of weights for averaging
         """
+        self.period = period
         self.finance = finance or get_all_ticker_close(tickers, period)
-        self.initAmount = initAmount
         self.summary = get_all_ticker_info(tickers)
-        self.summary['weight'] = np.array(weights) or (1/len(tickers))*np.ones(len(tickers))
+        self.summary['weight'] = np.array(weights)/np.array(weights).sum() or (1/len(tickers))*np.ones(len(tickers))
         # extract currency exposure
-        self.currencySplit = dict_weighted_count(self.summary, 'currency')
+        self.currencySplit = get_weighted_count(self.summary, 'currency')
         # extract region exposure
-        self.marketSplit = dict_weighted_count(self.summary, 'market')
-
-    def cagr(self):
-        cagrs = np.array([x.cagr() for x in self.assets])
-        return np.sum(self.summary['weight']*cagrs)
+        self.marketSplit = get_weighted_count(self.summary, 'market')
 
     def save_to_pickle(self, path: str):
         """
@@ -37,6 +32,27 @@ class Portfolio:
         """
         with open(path, 'wb') as fid:
             pickle.dump(self, fid)  # number of assets to load
+
+    def update(self, tickers=None, period=None, weights = None):
+        if tickers or period:
+            self.finance = get_all_ticker_close(tickers, period or self.period)
+        if tickers:
+            self.summary = get_all_ticker_info(tickers)
+        if weights:
+            self.summary['weight'] = np.array(weights)/np.array(weights).sum()
+        self.currencySplit = get_weighted_count(self.summary, 'currency')
+        self.marketSplit = get_weighted_count(self.summary, 'market')
+        return self
+
+    def get_scaled_prices(self):
+        prices_scaled = self.finance.apply(lambda x: x / x[x.first_valid_index()], axis=0).fillna(method='ffill')
+        return prices_scaled.rename(columns=self.summary['name'].to_dict())
+
+    def get_combined_worth(self):
+        prices_scaled = self.finance.apply(lambda x: x / x[x.first_valid_index()], axis=0).fillna(method='ffill')
+        w = self.summary['weight']
+        w.index = prices_scaled.columns
+        return (prices_scaled * w.transpose()).sum(axis=1).to_frame(name='Combined value')
 
 
 def get_all_ticker_close(tickers, period):
@@ -85,7 +101,6 @@ if __name__ == '__main__':
 
     ptf = Portfolio(tickers, period=8)
     # saving to pickle
-    # ptf.save_to_pickle('portfolio.pkl')
-    # plotting
-    # ptf.plot()
+    ptf.save_to_pickle('portfolio.pkl')
+
 
