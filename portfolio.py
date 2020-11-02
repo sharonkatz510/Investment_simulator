@@ -1,29 +1,27 @@
 import pandas as pd
 import pandas_datareader.yahoo.daily as pdr
-import yfinance as yf
+import yahooquery as yq
 from datetime import date
 import numpy as np
 import pickle
 #
 
 
-class Portfolio:    # TODO: implement "add" and "remove" methods, add ability to change resolution
+class Portfolio:    # TODO: add ability to change resolution
     """Bundle of assets with different weights"""
     def __init__(self, tickers, period=10, weights: list = None, finance=None):
         """
         :param tickers: list of tickers with somw general info
         :param period: time period in years
-        :param initAmount: money in fund
         :param weights: list of weights for averaging
         """
         self.period = period
         self.finance = finance or get_all_ticker_close(tickers, period)
         self.summary = get_all_ticker_info(tickers)
-        self.summary['weight'] = np.array(weights)/np.array(weights).sum() or (1/len(tickers))*np.ones(len(tickers))
+        self.summary['weight'] = np.array(weights)/np.array(weights).sum() or \
+                                 (1/self.summary.shape[0])*np.ones(self.summary.shape[0])
         # extract currency exposure
         self.currencySplit = get_weighted_count(self.summary, 'currency')
-        # extract region exposure
-        self.marketSplit = get_weighted_count(self.summary, 'market')
 
     def save_to_pickle(self, path: str):
         """
@@ -33,15 +31,16 @@ class Portfolio:    # TODO: implement "add" and "remove" methods, add ability to
         with open(path, 'wb') as fid:
             pickle.dump(self, fid)  # number of assets to load
 
-    def update(self, tickers=None, period=None, weights = None):
+    def update(self, tickers=None, period=None, weights=None):
         if tickers or period:
             self.finance = get_all_ticker_close(tickers, period or self.period)
         if tickers:
             self.summary = get_all_ticker_info(tickers)
         if weights:
             self.summary['weight'] = np.array(weights)/np.array(weights).sum()
+        elif 'weight' not in self.summary.columns:
+            self.summary['weight'] = (1/self.summary.shape[0])*np.ones(self.summary.shape[0])
         self.currencySplit = get_weighted_count(self.summary, 'currency')
-        self.marketSplit = get_weighted_count(self.summary, 'market')
         return self
 
     def get_scaled_prices(self):
@@ -54,6 +53,25 @@ class Portfolio:    # TODO: implement "add" and "remove" methods, add ability to
         w.index = prices_scaled.columns
         return (prices_scaled * w.transpose()).sum(axis=1).to_frame(name='Combined value')
 
+    def remove(self, tick):
+        self.summary.drop(tick, axis=0, inplace=True)
+        self.finance.drop(tick, axis=1, inplace=True)
+        self.update()
+
+    def add(self, tick):    # TODO: fix
+        dat = get_all_ticker_close(tick, self.period).to_frame().rename(columns={'Adj Close': tick})
+        self.finance = self.finance.join(dat)
+        info = get_all_ticker_info(tick)
+        self.summary.drop('weight', axis=1, inplace=True)
+        self.summary = self.summary.append(info)
+        self.update()
+
+    def get_sector_split(self):
+        query = yq.Ticker(self.summary['ticker'].to_list())
+        data = pd.DataFrame.from_dict(query.fund_sector_weightings)
+        mult = np.array(data) * np.array(self.summary['weight'].transpose())
+        return pd.Series(mult.sum(axis=1), index=data.index)
+
 
 def get_all_ticker_close(tickers, period):
     start_date = date.today().replace(year=date.today().year - period)
@@ -64,15 +82,12 @@ def get_all_ticker_close(tickers, period):
 
 
 def get_all_ticker_info(tickers):
-    data = []
-    for tick in tickers:
-        tickerData = yf.Ticker(tick)
-        data.append(pd.DataFrame.from_dict(tickerData.info, orient='index', columns=[tick]))
-    data = pd.concat(data, axis=1, join='inner').transpose()
-    info = data[['currency', 'shortName', 'market', 'exchange']]
-    info['ticker'] = tickers
-    info.rename(columns={'shortName': 'name'}, inplace=True)
-    return info
+    query = yq.Ticker(tickers)
+    currency = pd.DataFrame.from_dict(query.summary_detail).loc['currency', :]
+    data = pd.DataFrame.from_dict(query.quote_type).loc[['symbol', 'exchange', 'shortName'], :]
+    data = data.append(currency)
+    data.rename(indices={'shortName': 'name', 'symbol': 'ticker'}, inplace=True)
+    return data.transpose()
 
 
 def read_portfolio_from_pickle(path):
@@ -94,13 +109,5 @@ def get_weighted_count(df: pd.DataFrame, column: str):
     return pd.DataFrame.from_dict(dic, orient='index', columns=['weight'])
 
 
-if __name__ == '__main__':
-    tickers = ['CSPX.L', 'IWB', 'SWDA.L','VTI',
-               'VB','IWM','VTV','VOE','VBR','IMEA.SW',
-               'VT','VSS','VXUS','VWO']
-
-    ptf = Portfolio(tickers, period=8)
-    # saving to pickle
-    ptf.save_to_pickle('portfolio.pkl')
-
-
+__all__ = ['Portfolio', 'read_portfolio_from_pickle', 'get_all_ticker_info',
+           'get_weighted_count', 'get_all_ticker_close']
