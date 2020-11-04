@@ -105,7 +105,8 @@ def update_combined_figures(*ws):
     return div
 
 
-app.run_server(debug=False)
+if __name__ == "__main__":
+    app.run_server(debug=False)
 
 __author__ = "Sharon Katz"
 __email__ = 'sharonkats510@gmail.com'
