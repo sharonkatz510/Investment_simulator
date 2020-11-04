@@ -7,7 +7,7 @@ import pickle
 #
 
 
-class Portfolio:    # TODO: add ability to change resolution
+class Portfolio:
     """Bundle of assets with different weights"""
     def __init__(self, tickers, period=10, weights: list = None, finance=None):
         """
@@ -18,8 +18,8 @@ class Portfolio:    # TODO: add ability to change resolution
         self.period = period
         self.finance = finance or get_all_ticker_close(tickers, period)
         self.summary = get_all_ticker_info(tickers)
-        self.summary['weight'] = np.array(weights)/np.array(weights).sum() or \
-                                 (1/self.summary.shape[0])*np.ones(self.summary.shape[0])
+        self.summary['weight'] = np.array(weights)/np.array(weights).sum() if weights else \
+            (1/self.summary.shape[0])*np.ones(self.summary.shape[0])
         # extract currency exposure
         self.currencySplit = get_weighted_count(self.summary, 'currency')
 
@@ -114,7 +114,7 @@ def get_all_ticker_close(tickers, period):
     """
     start_date = date.today().replace(year=date.today().year - period)
     end_date = date.today()
-    query = pdr.YahooDailyReader(tickers, start=start_date, end=end_date, interval='m')
+    query = pdr.YahooDailyReader(tickers, start=start_date, end=end_date, interval='w')
     data = query.read()
     return data['Adj Close']
 
