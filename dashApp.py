@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+""" Dash app for simulating investment portfolio w/ different assets and weights. At the moment only works with ETFs"""
+
 import dash
 import plotly.express as px
 import dash_core_components as dcc
@@ -103,3 +106,7 @@ def update_combined_figures(*ws):
 
 
 app.run_server(debug=False)
+
+__author__ = "Sharon Katz"
+__email__ = 'sharonkats510@gmail.com'
+__license__ = "MIT"
