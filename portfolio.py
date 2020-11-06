@@ -38,10 +38,12 @@ class Portfolio:
         :param weights: list of weights corresponding to asset symbols
         :return: updated Portfolio
         """
-        if tickers or period:
-            self.finance = get_all_ticker_close(tickers, period or self.period)
         if tickers:
+            self.finance = get_all_ticker_close(tickers, period or self.period)
             self.summary = get_all_ticker_info(tickers)
+        elif period:
+            tickers = self.finance.columns
+            self.finance = get_all_ticker_close(tickers, period)
         if weights and (len(weights) == self.summary.shape[0]):
             self.summary['weight'] = np.array(weights)/np.array(weights).sum()
         elif 'weight' not in self.summary.columns:

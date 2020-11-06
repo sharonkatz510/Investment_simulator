@@ -62,6 +62,12 @@ app.layout = html.Div([
               html.Button('Add', id='add-button'), html.Button('Remove', id='remove-button')]),
     html.Div(id='all-assets',
              children=[dcc.Graph(id='all-ticker-graph', figure=fig1),
+                       dcc.Slider(id='period-slider',
+                                  min=1, max=20, marks={1: {'label': '1 year'},
+                                                        5: {'label': '5 years'},
+                                                        10: {'label': '10 years'},
+                                                        20: {'label': '20 years'}},
+                                  value=ptf.period),
                        html.Div(id='sliders', children=[slider(i, ptf) for i in range(len(w.index))])]),
     html.Button('Update weights', id='update-button'),
     html.Div(id='combined-graph', children=div2),
@@ -80,18 +86,19 @@ app.layout = html.Div([
 @app.callback(Output('portfolio-data', 'children'),
               [Input('add-button', 'n_clicks'),
                Input('remove-button', 'n_clicks'),
-               Input('update-button', 'n_clicks')],
+               Input('update-button', 'n_clicks'),
+               Input('period-slider', 'value')],
               [State('portfolio-finance', 'children'),
                State('portfolio-fund', 'children'),
                State('portfolio-period', 'children'),
                State('ticker-name', 'value'),
                State({'type': 'slider', 'index': ALL}, 'value')])
-def update_assets(_1, _2, _3, finance, fund, period, tick, *ws):
+def update_assets(_1, _2, _3, period, finance, fund, cur_period, tick, *ws):
     """
-    Update portfolio when adding an asset, removing an asset or updating the weights
+    Update portfolio when adding an asset, removing an asset or updating the weights/ period
     """
     finance = pd.read_json(finance); summary = pd.read_json(fund)
-    ptf = Portfolio(finance=finance, summary=summary, period=period)
+    ptf = Portfolio(finance=finance, summary=summary, period=cur_period)
     changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
     trigger = None
     if 'add' in changed_id:
@@ -103,6 +110,9 @@ def update_assets(_1, _2, _3, finance, fund, period, tick, *ws):
     elif 'update' in changed_id:
         ptf.update(weights=ws[0])
         trigger = 'update'
+    elif 'period' in changed_id:
+        ptf.update(period=period)
+        trigger = 'period'
     div = [
         html.Div(id='portfolio-finance', children=ptf.finance.to_json(), style={'display': 'none'}),
         html.Div(id='portfolio-fund', children=ptf.summary.to_json(), style={'display': 'none'}),
@@ -122,11 +132,17 @@ def update_multi_asset_objects(trigger, finance, fund, period, div):
     """
     finance = pd.read_json(finance); summary = pd.read_json(fund)
     ptf = Portfolio(finance=finance, summary=summary, period=period)
-    if trigger == 'add' or trigger == 'remove':
+    if trigger in ['add', 'remove', 'period']:
         scaled = ptf.get_scaled_prices()
         figure = px.line(scaled, title='Ticker revenue comparison')
         figure.update_layout(yaxis_tickformat='%')
         div = [dcc.Graph(id='all-ticker-graph', figure=figure),
+               dcc.Slider(id='period-slider',
+                          min=1, max=20, marks={1: {'label': '1 year'},
+                                                5: {'label': '5 years'},
+                                                10: {'label': '10 years'},
+                                                20: {'label': '20 years'}},
+                          value=ptf.period),
                html.Div(id='sliders', children=[slider(i, ptf) for i in range(len(finance.columns))])]
     return div
 
@@ -179,7 +195,7 @@ def save_content(_, finance, fund, period):
 
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(debug=False)
 
 __author__ = "Sharon Katz"
 __email__ = 'sharonkats510@gmail.com'
